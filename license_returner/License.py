@@ -105,10 +105,12 @@ class License:
         """Write license data to indicate number of licenses ready to be used."""
       
         try:
+            current = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}")["Parameter"]["Value"]
+            total = int(dataset_lic) + int(current)
             response = ssm.put_parameter(
                 Name=f"{self.prefix}-idl-{self.dataset}",
                 Type="String",
-                Value=str(dataset_lic),
+                Value=str(total),
                 Tier="Standard",
                 Overwrite=True
             )
