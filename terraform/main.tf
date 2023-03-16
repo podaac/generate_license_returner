@@ -25,6 +25,14 @@ provider "aws" {
 # Data sources
 data "aws_caller_identity" "current" {}
 
+data "aws_cloudwatch_log_group" "cw_log_group" {
+  name = "/aws/batch/job/${var.prefix}-license-returner/"
+}
+
+data "aws_ecr_repository" "license_returner" {
+  name = "${var.prefix}-license-returner"
+}
+
 # Local variables
 locals {
   account_id = data.aws_caller_identity.current.account_id
