@@ -27,7 +27,7 @@ class License:
     -------
     """
     
-    def __init__(self, unique_id, prefix, dataset, logger):
+    def __init__(self, unique_id, prefix, dataset, processing_type, logger):
         """
         Attributes
         ----------
@@ -37,6 +37,8 @@ class License:
             Prefix for environment that Generate is executing in
         dataset: str
             Name of dataset that has been processed
+        processing_type: str
+            Either "quicklook" or "refined"
         logger: logging.StreamHandler
             Logger object to use for logging statements
         """
@@ -44,6 +46,7 @@ class License:
         self.unique_id = unique_id
         self.prefix = prefix
         self.dataset = dataset
+        self.ptype = "ql" if processing_type == "quicklook" else "r"
         self.logger = logger
         
     def return_licenses(self):
@@ -51,11 +54,21 @@ class License:
         """
         
         ssm = boto3.client("ssm", region_name="us-west-2")
+        
+        # Retrieve reserved floating licenses
+        floating_lic = self.check_existence(ssm, f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating")
+
+        # Retreive quicklook for refined processing type
+        if self.ptype == "r":
+            quicklook_lic = self.check_existence(ssm, f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-ql")
+            # If quicklook exists then don't delete floating license
+            if quicklook_lic != None:
+                floating_lic = None
+        
         try:
-            # Get number of licenses that were used in the workflow
-            dataset_lic = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-lic")["Parameter"]["Value"]
-            floating_lic = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating")["Parameter"]["Value"]
-            
+            # Get number of dataset licenses that were used in the workflow
+            dataset_lic = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}")["Parameter"]["Value"]
+              
             # Wait until no other process is updating license info
             retrieving_lic =  ssm.get_parameter(Name=f"{self.prefix}-idl-retrieving-license")["Parameter"]["Value"]
             while retrieving_lic == "True":
@@ -73,17 +86,34 @@ class License:
             self.hold_license(ssm, "False")
             
             # Delete unique parameters
-            response = ssm.delete_parameters(
-                Names=[f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-lic",
-                       f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating"]
-            )
-            self.logger.info(f"Deleted parameter: {self.prefix}-idl-{self.dataset}-{self.unique_id}-lic")
-            self.logger.info(f"Deleted parameter: {self.prefix}-idl-{self.dataset}-{self.unique_id}-floating")
+            if floating_lic:
+                deletion_list = [f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}", f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating"]
+            else:
+                deletion_list = [f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}"]
+            response = ssm.delete_parameters(Names=deletion_list)
+            for parameter in deletion_list: self.logger.info(f"Deleted parameter: {parameter}.")
             
         except botocore.exceptions.ClientError as e:
             self.logger.error(e)
             self.logger.info("System exit.")
             exit(1)
+            
+    def check_existence(self, ssm, parameter_name):
+        """Check existence of SSM parameter and return value if it exists.
+        
+        Returns None if does not exist.
+        """
+        
+        try:
+            parameter = ssm.get_parameter(Name=parameter_name)["Parameter"]["Value"]
+        except botocore.exceptions.ClientError as e:
+            if "(ParameterNotFound)" in str(e) :
+                parameter = None
+            else:
+                self.logger.error(e)
+                self.logger.info("System exit.")
+                exit(1)
+        return parameter        
     
     def hold_license(self, ssm, on_hold):
         """Put parameter license number ot use indicating retrieval in process."""
@@ -114,17 +144,18 @@ class License:
                 Tier="Standard",
                 Overwrite=True
             )
-            current_floating = ssm.get_parameter(Name=f"{self.prefix}-idl-floating")["Parameter"]["Value"]
-            floating_total = int(floating_lic) + int(current_floating)
-            response = ssm.put_parameter(
-                Name=f"{self.prefix}-idl-floating",
-                Type="String",
-                Value=str(floating_total),
-                Tier="Standard",
-                Overwrite=True
-            )
             self.logger.info(f"Wrote {dataset_lic} license(s) to {self.dataset}.")
-            self.logger.info(f"Wrote {floating_lic} license(s)to floating.")
+            if floating_lic:
+                current_floating = ssm.get_parameter(Name=f"{self.prefix}-idl-floating")["Parameter"]["Value"]
+                floating_total = int(floating_lic) + int(current_floating)
+                response = ssm.put_parameter(
+                    Name=f"{self.prefix}-idl-floating",
+                    Type="String",
+                    Value=str(floating_total),
+                    Tier="Standard",
+                    Overwrite=True
+                )
+                self.logger.info(f"Wrote {floating_lic} license(s)to floating.")
         except botocore.exceptions.ClientError as e:
             self.logger.error(f"Could not return {self.dataset} and floating licenses...")
             raise e

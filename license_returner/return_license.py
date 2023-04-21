@@ -25,10 +25,11 @@ def run_uploader():
     unique_id = int(sys.argv[1])
     prefix = sys.argv[2]
     dataset = sys.argv[3]
+    processing_type = sys.argv[4]
     
     # Return licenses
     logger = get_logger()
-    license = License(unique_id, prefix, dataset, logger)
+    license = License(unique_id, prefix, dataset, processing_type, logger)
     license.return_licenses()
     
     end = datetime.datetime.now()
