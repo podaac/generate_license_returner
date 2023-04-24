@@ -17,16 +17,17 @@ None
 Arguments:
 1. unique_id: Integer to identify IDL licenses used by workflow in Parameter Store.
 2. prefix: String Prefix for environment that Generate is executing in.
-8. dataset: Name of dataset that has been processed.
+3. dataset: Name of dataset that has been processed.
+4. processing_type: Either `quicklook` or `refined`. Used to return licenses reserved for these particular job types.
 
 MODIS A: 
-`docker run --name returner --rm -e AWS_ACCESS_KEY_ID=$aws_key -e AWS_SECRET_ACCESS_KEY=$aws_secret -e AWS_DEFAULT_REGION=$default_region returner:latest 6233 podaac-sndbx-generate aqua`
+`docker run --name returner --rm -e AWS_ACCESS_KEY_ID=$aws_key -e AWS_SECRET_ACCESS_KEY=$aws_secret -e AWS_DEFAULT_REGION=$default_region returner:latest 6233 podaac-sndbx-generate aqua quicklook`
 
 MODIS T: 
-`docker run --name returner --rm -e AWS_ACCESS_KEY_ID=$aws_key -e AWS_SECRET_ACCESS_KEY=$aws_secret -e AWS_DEFAULT_REGION=$default_region returner:latest 6233 podaac-sndbx-generate terra`
+`docker run --name returner --rm -e AWS_ACCESS_KEY_ID=$aws_key -e AWS_SECRET_ACCESS_KEY=$aws_secret -e AWS_DEFAULT_REGION=$default_region returner:latest 6233 podaac-sndbx-generate terra refined`
 
 VIIRS: 
-`docker run --name returner --rm -e AWS_ACCESS_KEY_ID=$aws_key -e AWS_SECRET_ACCESS_KEY=$aws_secret -e AWS_DEFAULT_REGION=$default_region returner:latest 6233 podaac-sndbx-generate viirs`
+`docker run --name returner --rm -e AWS_ACCESS_KEY_ID=$aws_key -e AWS_SECRET_ACCESS_KEY=$aws_secret -e AWS_DEFAULT_REGION=$default_region returner:latest 6233 podaac-sndbx-generate viirs quicklook`
 
 ## aws infrastructure
 
