@@ -72,7 +72,7 @@ class License:
             # Wait until no other process is updating license info
             retrieving_lic =  ssm.get_parameter(Name=f"{self.prefix}-idl-retrieving-license")["Parameter"]["Value"]
             while retrieving_lic == "True":
-                self.logger.info("Watiing for license retrieval...")
+                self.logger.info("Waiting for license retrieval...")
                 time.sleep(3)
                 retrieving_lic =  ssm.get_parameter(Name=f"{self.prefix}-idl-retrieving-license")["Parameter"]["Value"]
             
@@ -94,7 +94,7 @@ class License:
             for parameter in deletion_list: self.logger.info(f"Deleted parameter: {parameter}.")
             
         except botocore.exceptions.ClientError as e:
-            self.logger.error(e)
+            self.logger.error(f"Error encountered: {e}")
             self.logger.info("System exit.")
             exit(1)
             
@@ -110,7 +110,7 @@ class License:
             if "(ParameterNotFound)" in str(e) :
                 parameter = None
             else:
-                self.logger.error(e)
+                self.logger.error(f"Error encountered: {e}")
                 self.logger.info("System exit.")
                 exit(1)
         return parameter        
@@ -144,7 +144,7 @@ class License:
                 Tier="Standard",
                 Overwrite=True
             )
-            self.logger.info(f"Wrote {dataset_lic} license(s) to {self.dataset}.")
+            self.logger.info(f"Wrote {dataset_lic} license(s) to {self.prefix}-idl-{self.dataset} parameter.")
             if floating_lic:
                 current_floating = ssm.get_parameter(Name=f"{self.prefix}-idl-floating")["Parameter"]["Value"]
                 floating_total = int(floating_lic) + int(current_floating)
@@ -155,7 +155,7 @@ class License:
                     Tier="Standard",
                     Overwrite=True
                 )
-                self.logger.info(f"Wrote {floating_lic} license(s)to floating.")
+                self.logger.info(f"Wrote {floating_lic} license(s)to {self.prefix}-idl-floating parameter.")
         except botocore.exceptions.ClientError as e:
-            self.logger.error(f"Could not return {self.dataset} and floating licenses...")
+            self.logger.error(f"Could not return IDL licenses to {self.prefix}-idl-{self.dataset} and {self.prefix}-idl-floating...")
             raise e
