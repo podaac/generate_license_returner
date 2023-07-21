@@ -69,7 +69,7 @@ class License:
             if quicklook_lic != None:
                 floating_lic = None
                 self.logger.info("Quicklook licenses exist and floating license(s) belongs to quicklook operations.")
-                self.logger.info(f"Not modifying {floating_lic} floating license(s).")
+                self.logger.info(f"Not modifying floating license(s).")
         
         try:
             # Get number of dataset licenses that were used in the workflow
