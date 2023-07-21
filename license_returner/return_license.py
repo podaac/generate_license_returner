@@ -17,7 +17,7 @@ import sys
 # Local imports
 from License import License
 
-def run_uploader():
+def run_license_returner():
     
     start = datetime.datetime.now()
     
@@ -61,4 +61,4 @@ def get_logger():
     return logger
     
 if __name__ == "__main__":
-    run_uploader()
+    run_license_returner()

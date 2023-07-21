@@ -16,5 +16,5 @@ RUN /app/env/bin/pip install -r /app/requirements.txt
 # Stage 3 - Execute code
 # FROM stage2 as stage3
 LABEL version="0.1" \
-    description="Containerized Generate: Uploader"
+    description="Containerized Generate: License Returner"
 ENTRYPOINT [ "/app/env/bin/python3", "/app/license_returner/return_license.py" ]
