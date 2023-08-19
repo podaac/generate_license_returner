@@ -17,7 +17,7 @@ import sys
 # Local imports
 from License import License
 
-def run_uploader():
+def run_license_returner():
     
     start = datetime.datetime.now()
     
@@ -51,7 +51,7 @@ def get_logger():
     console_handler = logging.StreamHandler()
 
     # Create a formatter and add it to the handler
-    console_format = logging.Formatter("%(asctime)s - %(module)s - %(levelname)s : %(message)s")
+    console_format = logging.Formatter("%(module)s - %(levelname)s : %(message)s")
     console_handler.setFormatter(console_format)
 
     # Add handlers to logger
@@ -61,4 +61,4 @@ def get_logger():
     return logger
     
 if __name__ == "__main__":
-    run_uploader()
+    run_license_returner()

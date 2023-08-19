@@ -53,10 +53,14 @@ class License:
         """Returns IDL licenses that were in use by the current workflow execution.
         """
         
+        processing_type = "quicklook" if self.ptype == "ql" else "refined"
+        self.logger.info(f"Running license returner on {self.dataset.upper()} {processing_type} with unique ID of {self.unique_id}.")
+        
         ssm = boto3.client("ssm", region_name="us-west-2")
         
         # Retrieve reserved floating licenses
         floating_lic = self.check_existence(ssm, f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating")
+        self.logger.info(f"Number of floating licenses reserved: {floating_lic}.")
 
         # Retreive quicklook for refined processing type
         if self.ptype == "r":
@@ -64,37 +68,46 @@ class License:
             # If quicklook exists then don't delete floating license
             if quicklook_lic != None:
                 floating_lic = None
+                self.logger.info("Quicklook licenses exist and floating license(s) belongs to quicklook operations.")
+                self.logger.info(f"Not modifying floating license(s).")
         
         try:
             # Get number of dataset licenses that were used in the workflow
-            dataset_lic = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}")["Parameter"]["Value"]
-              
-            # Wait until no other process is updating license info
-            retrieving_lic =  ssm.get_parameter(Name=f"{self.prefix}-idl-retrieving-license")["Parameter"]["Value"]
-            while retrieving_lic == "True":
-                self.logger.info("Watiing for license retrieval...")
-                time.sleep(3)
+            dataset_lic = self.check_existence(ssm, f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}")
+            self.logger.info(f"Number of dataset licenses reserved: {dataset_lic}.")
+            
+            if not floating_lic and not dataset_lic:
+                self.logger.info("No licenses detected to return.")
+            
+            else:              
+                # Wait until no other process is updating license info
                 retrieving_lic =  ssm.get_parameter(Name=f"{self.prefix}-idl-retrieving-license")["Parameter"]["Value"]
-            
-            # Place hold on licenses so they are not changed
-            self.hold_license(ssm, "True")  
-            
-            # Return licenses to appropriate parameters
-            self.write_licenses(ssm, dataset_lic, floating_lic)
-            
-            # Release hold as done updating
-            self.hold_license(ssm, "False")
-            
-            # Delete unique parameters
-            if floating_lic:
-                deletion_list = [f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}", f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating"]
-            else:
-                deletion_list = [f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}"]
-            response = ssm.delete_parameters(Names=deletion_list)
-            for parameter in deletion_list: self.logger.info(f"Deleted parameter: {parameter}.")
+                while retrieving_lic == "True":
+                    self.logger.info("Waiting for license retrieval...")
+                    time.sleep(3)
+                    retrieving_lic =  ssm.get_parameter(Name=f"{self.prefix}-idl-retrieving-license")["Parameter"]["Value"]
+                
+                # Place hold on licenses so they are not changed
+                self.hold_license(ssm, "True")  
+                
+                # Return licenses to appropriate parameters
+                self.write_licenses(ssm, dataset_lic, floating_lic)
+                
+                # Delete unique parameters
+                if floating_lic and dataset_lic:
+                    deletion_list = [f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}", f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating"]
+                elif floating_lic:
+                    deletion_list = [f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating"]
+                elif dataset_lic:
+                    deletion_list = [f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}"]
+                response = ssm.delete_parameters(Names=deletion_list)
+                for parameter in deletion_list: self.logger.info(f"Deleted parameter: {parameter}.")
+                
+                # Release hold as done updating
+                self.hold_license(ssm, "False")
             
         except botocore.exceptions.ClientError as e:
-            self.logger.error(e)
+            self.logger.error(f"Error encountered: {e}")
             self.logger.info("System exit.")
             exit(1)
             
@@ -106,11 +119,13 @@ class License:
         
         try:
             parameter = ssm.get_parameter(Name=parameter_name)["Parameter"]["Value"]
+            self.logger.info(f"Located {parameter_name}: {parameter} reserved licenses.")
         except botocore.exceptions.ClientError as e:
             if "(ParameterNotFound)" in str(e) :
                 parameter = None
+                self.logger.info(f"Could not locate {parameter_name}.")
             else:
-                self.logger.error(e)
+                self.logger.error(f"Error encountered: {e}")
                 self.logger.info("System exit.")
                 exit(1)
         return parameter        
@@ -118,6 +133,7 @@ class License:
     def hold_license(self, ssm, on_hold):
         """Put parameter license number ot use indicating retrieval in process."""
         
+        hold_action = "place" if on_hold == "True" else "remove"
         try:
             response = ssm.put_parameter(
                 Name=f"{self.prefix}-idl-retrieving-license",
@@ -126,8 +142,8 @@ class License:
                 Tier="Standard",
                 Overwrite=True
             )
+            self.logger.info(f"{hold_action.capitalize()}d hold on IDL licenses.")
         except botocore.exceptions.ClientError as e:
-            hold_action = "place" if on_hold == "True" else "remove"
             self.logger.error(f"Could not {hold_action} a hold on licenses...")
             raise e
         
@@ -135,16 +151,17 @@ class License:
         """Write license data to indicate number of licenses ready to be used."""
       
         try:
-            current = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}")["Parameter"]["Value"]
-            total = int(dataset_lic) + int(current)
-            response = ssm.put_parameter(
-                Name=f"{self.prefix}-idl-{self.dataset}",
-                Type="String",
-                Value=str(total),
-                Tier="Standard",
-                Overwrite=True
-            )
-            self.logger.info(f"Wrote {dataset_lic} license(s) to {self.dataset}.")
+            if dataset_lic:
+                current = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}")["Parameter"]["Value"]
+                total = int(dataset_lic) + int(current)
+                response = ssm.put_parameter(
+                    Name=f"{self.prefix}-idl-{self.dataset}",
+                    Type="String",
+                    Value=str(total),
+                    Tier="Standard",
+                    Overwrite=True
+                )
+                self.logger.info(f"Wrote {dataset_lic} license(s) to {self.prefix}-idl-{self.dataset} parameter.")
             if floating_lic:
                 current_floating = ssm.get_parameter(Name=f"{self.prefix}-idl-floating")["Parameter"]["Value"]
                 floating_total = int(floating_lic) + int(current_floating)
@@ -155,7 +172,7 @@ class License:
                     Tier="Standard",
                     Overwrite=True
                 )
-                self.logger.info(f"Wrote {floating_lic} license(s)to floating.")
+                self.logger.info(f"Wrote {floating_lic} license(s)to {self.prefix}-idl-floating parameter.")
         except botocore.exceptions.ClientError as e:
-            self.logger.error(f"Could not return {self.dataset} and floating licenses...")
+            self.logger.error(f"Could not return IDL licenses to {self.prefix}-idl-{self.dataset} and {self.prefix}-idl-floating...")
             raise e
