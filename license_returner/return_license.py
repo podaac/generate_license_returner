@@ -12,6 +12,7 @@ Args:
 # Standard imports 
 import datetime
 import logging
+import os
 import sys
 
 # Local imports
@@ -27,8 +28,20 @@ def run_license_returner():
     dataset = sys.argv[3]
     processing_type = sys.argv[4]
     
-    # Return licenses
+    # Log current execution state
     logger = get_logger()
+    if dataset == "aqua":
+        ds = "MODIS Aqua"
+    elif dataset == "terra":
+        ds = "MODIS Terra"
+    else:
+        ds = "VIIRS"
+    logger.info(f"Job identifier: {os.environ.get('AWS_BATCH_JOB_ID')}")
+    logger.info(f"Unique identifier: {unique_id}")
+    logger.info(f"Dataset: {ds}")
+    logger.info(f"Processing type: {processing_type.upper()}")
+    
+    # Return licenses
     license = License(unique_id, prefix, dataset, processing_type, logger)
     license.return_licenses()
     
