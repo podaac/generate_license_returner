@@ -107,7 +107,8 @@ class License:
                 self.hold_license(ssm, "False")
             
         except botocore.exceptions.ClientError as e:
-            self.logger.error(f"Error encountered: {e}")
+            ssm = boto3.client("ssm", region_name="us-west-2")
+            self.hold_license(ssm, "False")
             self.logger.info("System exit.")
             exit(1)
             
@@ -125,6 +126,7 @@ class License:
                 parameter = None
                 self.logger.info(f"Could not locate {parameter_name}.")
             else:
+                self.logger.info(f"Erorr encountered with parameter: {parameter_name}.")
                 self.logger.error(f"Error encountered: {e}")
                 self.logger.info("System exit.")
                 exit(1)
@@ -144,7 +146,8 @@ class License:
             )
             self.logger.info(f"{hold_action.capitalize()}d hold on IDL licenses.")
         except botocore.exceptions.ClientError as e:
-            self.logger.error(f"Could not {hold_action} a hold on licenses...")
+            self.logger.info(f"Could not {hold_action} a hold on licenses...")
+            self.logger.error(e)
             raise e
         
     def write_licenses(self, ssm, dataset_lic, floating_lic):
@@ -174,5 +177,6 @@ class License:
                 )
                 self.logger.info(f"Wrote {floating_lic} license(s)to {self.prefix}-idl-floating parameter.")
         except botocore.exceptions.ClientError as e:
-            self.logger.error(f"Could not return IDL licenses to {self.prefix}-idl-{self.dataset} and {self.prefix}-idl-floating...")
+            self.logger.info(f"Could not return IDL licenses to {self.prefix}-idl-{self.dataset} and {self.prefix}-idl-floating...")
+            self.logger.error(e)
             raise e
