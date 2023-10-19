@@ -175,7 +175,7 @@ class License:
                     Tier="Standard",
                     Overwrite=True
                 )
-                self.logger.info(f"Wrote {floating_lic} license(s)to {self.prefix}-idl-floating parameter.")
+                self.logger.info(f"Wrote {floating_lic} license(s) to {self.prefix}-idl-floating parameter.")
         except botocore.exceptions.ClientError as e:
             self.logger.info(f"Could not return IDL licenses to {self.prefix}-idl-{self.dataset} and {self.prefix}-idl-floating...")
             self.logger.error(e)
