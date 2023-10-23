@@ -120,7 +120,8 @@ class License:
         
         try:
             parameter = ssm.get_parameter(Name=parameter_name)["Parameter"]["Value"]
-            self.logger.info(f"Located {parameter_name}: {parameter} reserved licenses.")
+            ltype = "floating" if "floating" in parameter_name else "dataset"
+            self.logger.info(f"Located {ltype} {parameter_name}: {parameter} reserved licenses.")
         except botocore.exceptions.ClientError as e:
             if "(ParameterNotFound)" in str(e) :
                 parameter = None
