@@ -48,6 +48,14 @@ class License:
         self.dataset = dataset
         self.ptype = "ql" if processing_type == "quicklook" else "r"
         self.logger = logger
+        self.idl_license_dict = {
+            "floating_idl_located": "None",
+            "floating_idl_located_number": 0,
+            "dataset_quicklook_idl_located": "None",
+            "dataset_quicklook_idl_located_number": 0,
+            "dataset_refined_idl_located": "None",
+            "dataset_refined_idl_located_number": 0
+        }
         
     def return_licenses(self):
         """Returns IDL licenses that were in use by the current workflow execution.
@@ -70,6 +78,8 @@ class License:
                 floating_lic = None
                 self.logger.info("Quicklook licenses exist and floating license(s) belongs to quicklook operations.")
                 self.logger.info(f"Not modifying floating license(s).")
+                self.idl_license_dict["floating_idl_located"] = "None"
+                self.idl_license_dict["floating_idl_located_number"] = 0
         
         try:
             # Get number of dataset licenses that were used in the workflow
@@ -122,10 +132,16 @@ class License:
             parameter = ssm.get_parameter(Name=parameter_name)["Parameter"]["Value"]
             if "floating" in parameter_name:
                 ltype = "floating"
+                self.idl_license_dict["floating_idl_located"] = parameter_name
+                self.idl_license_dict["floating_idl_located_number"] = parameter
             elif "ql" in parameter_name:
                 ltype = "quicklook dataset"
+                self.idl_license_dict["dataset_quicklook_idl_located"] = parameter_name
+                self.idl_license_dict["dataset_quicklook_idl_located_number"] = parameter
             else:
                 ltype = "refined dataset"
+                self.idl_license_dict["dataset_refined_idl_located"] = parameter_name
+                self.idl_license_dict["dataset_refined_idl_located_number"] = parameter
             self.logger.info(f"Located {ltype} {parameter_name}: {parameter} reserved licenses.")
         except botocore.exceptions.ClientError as e:
             if "(ParameterNotFound)" in str(e) :

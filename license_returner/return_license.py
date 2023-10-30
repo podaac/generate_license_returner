@@ -40,10 +40,14 @@ def run_license_returner():
     logger.info(f"Unique identifier: {unique_id}")
     logger.info(f"Dataset: {ds}")
     logger.info(f"Processing type: {processing_type.upper()}")
+    execution_data = f"job_id {os.environ.get('AWS_BATCH_JOB_ID')} - unique_id: {unique_id} - dataset: {ds} - processing_type: {processing_type.upper()}"
     
     # Return licenses
     license = License(unique_id, prefix, dataset, processing_type, logger)
     license.return_licenses()
+    
+    # Print final log message
+    print_final_log(logger, execution_data, license.idl_license_dict)
     
     end = datetime.datetime.now()
     logger.info(f"Total execution time: {end - start}")
@@ -72,6 +76,17 @@ def get_logger():
 
     # Return logger
     return logger
+
+def print_final_log(logger, execution_data, idl_license_dict):
+    """Print final log message."""
+    
+    # Organize file data into a string
+    final_log_message = execution_data
+    for key,value in idl_license_dict.items():
+        final_log_message += f" - {key}: {value}"
+    
+    # Print final log message and remove temp log file
+    logger.info(final_log_message)
     
 if __name__ == "__main__":
     run_license_returner()
