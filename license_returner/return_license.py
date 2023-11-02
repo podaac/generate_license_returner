@@ -40,7 +40,7 @@ def run_license_returner():
     logger.info(f"Unique identifier: {unique_id}")
     logger.info(f"Dataset: {ds}")
     logger.info(f"Processing type: {processing_type.upper()}")
-    execution_data = f"job_id {os.environ.get('AWS_BATCH_JOB_ID')} - unique_id: {unique_id} - dataset: {ds} - processing_type: {processing_type.upper()}"
+    execution_data = f"unique_id: {unique_id} - dataset: {ds} - processing_type: {processing_type.upper()} - job_id {os.environ.get('AWS_BATCH_JOB_ID')}"
     
     # Return licenses
     license = License(unique_id, prefix, dataset, processing_type, logger)
