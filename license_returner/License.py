@@ -178,6 +178,7 @@ class License:
         try:
             if dataset_lic:
                 current = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}")["Parameter"]["Value"]
+                self.logger.info(f"Current dataset pool: {current}.")
                 total = int(dataset_lic) + int(current)
                 response = ssm.put_parameter(
                     Name=f"{self.prefix}-idl-{self.dataset}",
@@ -189,6 +190,7 @@ class License:
                 self.logger.info(f"Wrote {dataset_lic} license(s) to {self.prefix}-idl-{self.dataset} parameter.")
             if floating_lic:
                 current_floating = ssm.get_parameter(Name=f"{self.prefix}-idl-floating")["Parameter"]["Value"]
+                self.logger.info(f"Current floating pool: {current}.")
                 floating_total = int(floating_lic) + int(current_floating)
                 response = ssm.put_parameter(
                     Name=f"{self.prefix}-idl-floating",

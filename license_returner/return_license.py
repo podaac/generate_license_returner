@@ -13,7 +13,9 @@ Args:
 import datetime
 import logging
 import os
+import random
 import sys
+import time
 
 # Local imports
 from License import License
@@ -41,6 +43,12 @@ def run_license_returner():
     logger.info(f"Dataset: {ds}")
     logger.info(f"Processing type: {processing_type.upper()}")
     execution_data = f"unique_id: {unique_id} - dataset: {ds} - processing_type: {processing_type.upper()} - job_id {os.environ.get('AWS_BATCH_JOB_ID')}"
+    
+    # Sleep random n seconds to deal with concurrency
+    random.seed(a=os.environ.get('AWS_BATCH_JOB_ID'), version=2)
+    s = random.randint(1,10)
+    logger.info(f"Sleeping {s} seconds...")
+    time.sleep(s)
     
     # Return licenses
     license = License(unique_id, prefix, dataset, processing_type, logger)
