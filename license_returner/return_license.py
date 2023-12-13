@@ -12,7 +12,10 @@ Args:
 # Standard imports 
 import datetime
 import logging
+import os
+import random
 import sys
+import time
 
 # Local imports
 from License import License
@@ -27,10 +30,32 @@ def run_license_returner():
     dataset = sys.argv[3]
     processing_type = sys.argv[4]
     
-    # Return licenses
+    # Log current execution state
     logger = get_logger()
+    if dataset == "aqua":
+        ds = "MODIS Aqua"
+    elif dataset == "terra":
+        ds = "MODIS Terra"
+    else:
+        ds = "VIIRS"
+    logger.info(f"Job identifier: {os.environ.get('AWS_BATCH_JOB_ID')}")
+    logger.info(f"Unique identifier: {unique_id}")
+    logger.info(f"Dataset: {ds}")
+    logger.info(f"Processing type: {processing_type.upper()}")
+    execution_data = f"unique_id: {unique_id} - dataset: {ds} - processing_type: {processing_type.upper()} - job_id {os.environ.get('AWS_BATCH_JOB_ID')}"
+    
+    # Sleep random n seconds to deal with concurrency
+    random.seed(a=os.environ.get('AWS_BATCH_JOB_ID'), version=2)
+    s = random.randint(1,10)
+    logger.info(f"Sleeping {s} seconds...")
+    time.sleep(s)
+    
+    # Return licenses
     license = License(unique_id, prefix, dataset, processing_type, logger)
     license.return_licenses()
+    
+    # Print final log message
+    print_final_log(logger, execution_data, license.idl_license_dict)
     
     end = datetime.datetime.now()
     logger.info(f"Total execution time: {end - start}")
@@ -59,6 +84,17 @@ def get_logger():
 
     # Return logger
     return logger
+
+def print_final_log(logger, execution_data, idl_license_dict):
+    """Print final log message."""
+    
+    # Organize file data into a string
+    final_log_message = execution_data
+    for key,value in idl_license_dict.items():
+        final_log_message += f" - {key}: {value}"
+    
+    # Print final log message and remove temp log file
+    logger.info(final_log_message)
     
 if __name__ == "__main__":
     run_license_returner()

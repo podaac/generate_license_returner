@@ -48,6 +48,14 @@ class License:
         self.dataset = dataset
         self.ptype = "ql" if processing_type == "quicklook" else "r"
         self.logger = logger
+        self.idl_license_dict = {
+            "floating_idl_located": "None",
+            "floating_idl_located_number": 0,
+            "dataset_quicklook_idl_located": "None",
+            "dataset_quicklook_idl_located_number": 0,
+            "dataset_refined_idl_located": "None",
+            "dataset_refined_idl_located_number": 0
+        }
         
     def return_licenses(self):
         """Returns IDL licenses that were in use by the current workflow execution.
@@ -70,6 +78,8 @@ class License:
                 floating_lic = None
                 self.logger.info("Quicklook licenses exist and floating license(s) belongs to quicklook operations.")
                 self.logger.info(f"Not modifying floating license(s).")
+                self.idl_license_dict["floating_idl_located"] = "None"
+                self.idl_license_dict["floating_idl_located_number"] = 0
         
         try:
             # Get number of dataset licenses that were used in the workflow
@@ -107,7 +117,8 @@ class License:
                 self.hold_license(ssm, "False")
             
         except botocore.exceptions.ClientError as e:
-            self.logger.error(f"Error encountered: {e}")
+            ssm = boto3.client("ssm", region_name="us-west-2")
+            self.hold_license(ssm, "False")
             self.logger.info("System exit.")
             exit(1)
             
@@ -119,12 +130,25 @@ class License:
         
         try:
             parameter = ssm.get_parameter(Name=parameter_name)["Parameter"]["Value"]
-            self.logger.info(f"Located {parameter_name}: {parameter} reserved licenses.")
+            if "floating" in parameter_name:
+                ltype = "floating"
+                self.idl_license_dict["floating_idl_located"] = parameter_name
+                self.idl_license_dict["floating_idl_located_number"] = parameter
+            elif "ql" in parameter_name:
+                ltype = "quicklook dataset"
+                self.idl_license_dict["dataset_quicklook_idl_located"] = parameter_name
+                self.idl_license_dict["dataset_quicklook_idl_located_number"] = parameter
+            else:
+                ltype = "refined dataset"
+                self.idl_license_dict["dataset_refined_idl_located"] = parameter_name
+                self.idl_license_dict["dataset_refined_idl_located_number"] = parameter
+            self.logger.info(f"Located {ltype} {parameter_name}: {parameter} reserved licenses.")
         except botocore.exceptions.ClientError as e:
             if "(ParameterNotFound)" in str(e) :
                 parameter = None
                 self.logger.info(f"Could not locate {parameter_name}.")
             else:
+                self.logger.info(f"Erorr encountered with parameter: {parameter_name}.")
                 self.logger.error(f"Error encountered: {e}")
                 self.logger.info("System exit.")
                 exit(1)
@@ -144,7 +168,8 @@ class License:
             )
             self.logger.info(f"{hold_action.capitalize()}d hold on IDL licenses.")
         except botocore.exceptions.ClientError as e:
-            self.logger.error(f"Could not {hold_action} a hold on licenses...")
+            self.logger.info(f"Could not {hold_action} a hold on licenses...")
+            self.logger.error(e)
             raise e
         
     def write_licenses(self, ssm, dataset_lic, floating_lic):
@@ -153,6 +178,7 @@ class License:
         try:
             if dataset_lic:
                 current = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}")["Parameter"]["Value"]
+                self.logger.info(f"Current dataset pool: {current}.")
                 total = int(dataset_lic) + int(current)
                 response = ssm.put_parameter(
                     Name=f"{self.prefix}-idl-{self.dataset}",
@@ -164,6 +190,7 @@ class License:
                 self.logger.info(f"Wrote {dataset_lic} license(s) to {self.prefix}-idl-{self.dataset} parameter.")
             if floating_lic:
                 current_floating = ssm.get_parameter(Name=f"{self.prefix}-idl-floating")["Parameter"]["Value"]
+                self.logger.info(f"Current floating pool: {current_floating}.")
                 floating_total = int(floating_lic) + int(current_floating)
                 response = ssm.put_parameter(
                     Name=f"{self.prefix}-idl-floating",
@@ -172,7 +199,8 @@ class License:
                     Tier="Standard",
                     Overwrite=True
                 )
-                self.logger.info(f"Wrote {floating_lic} license(s)to {self.prefix}-idl-floating parameter.")
+                self.logger.info(f"Wrote {floating_lic} license(s) to {self.prefix}-idl-floating parameter.")
         except botocore.exceptions.ClientError as e:
-            self.logger.error(f"Could not return IDL licenses to {self.prefix}-idl-{self.dataset} and {self.prefix}-idl-floating...")
+            self.logger.info(f"Could not return IDL licenses to {self.prefix}-idl-{self.dataset} and {self.prefix}-idl-floating...")
+            self.logger.error(e)
             raise e
