@@ -1,4 +1,6 @@
 # Standard imports
+import os
+import random
 import time
 
 # Third-party imports
@@ -65,23 +67,23 @@ class License:
         self.logger.info(f"Running license returner on {self.dataset.upper()} {processing_type} with unique ID of {self.unique_id}.")
         
         ssm = boto3.client("ssm", region_name="us-west-2")
-        
-        # Retrieve reserved floating licenses
-        floating_lic = self.check_existence(ssm, f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating")
-        self.logger.info(f"Number of floating licenses reserved: {floating_lic}.")
-
-        # Retreive quicklook for refined processing type
-        if self.ptype == "r":
-            quicklook_lic = self.check_existence(ssm, f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-ql")
-            # If quicklook exists then don't delete floating license
-            if quicklook_lic != None:
-                floating_lic = None
-                self.logger.info("Quicklook licenses exist and floating license(s) belongs to quicklook operations.")
-                self.logger.info(f"Not modifying floating license(s).")
-                self.idl_license_dict["floating_idl_located"] = "None"
-                self.idl_license_dict["floating_idl_located_number"] = 0
-        
         try:
+            # Retrieve reserved floating licenses
+            floating_lic = self.check_existence(ssm, f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-floating")
+            self.logger.info(f"Number of floating licenses reserved: {floating_lic}.")
+
+            # Retreive quicklook for refined processing type
+            if self.ptype == "r":
+                quicklook_lic = self.check_existence(ssm, f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-ql")
+                # If quicklook exists then don't delete floating license
+                if quicklook_lic != None:
+                    floating_lic = None
+                    self.logger.info("Quicklook licenses exist and floating license(s) belongs to quicklook operations.")
+                    self.logger.info(f"Not modifying floating license(s).")
+                    self.idl_license_dict["floating_idl_located"] = "None"
+                    self.idl_license_dict["floating_idl_located_number"] = 0
+        
+        
             # Get number of dataset licenses that were used in the workflow
             dataset_lic = self.check_existence(ssm, f"{self.prefix}-idl-{self.dataset}-{self.unique_id}-{self.ptype}")
             self.logger.info(f"Number of dataset licenses reserved: {dataset_lic}.")
@@ -117,6 +119,7 @@ class License:
                 self.hold_license(ssm, "False")
             
         except botocore.exceptions.ClientError as e:
+            self.logger.error(f"Error encountered: {e}.")
             ssm = boto3.client("ssm", region_name="us-west-2")
             self.hold_license(ssm, "False")
             self.logger.info("System exit.")
@@ -149,15 +152,28 @@ class License:
                 self.logger.info(f"Could not locate {parameter_name}.")
             else:
                 self.logger.info(f"Erorr encountered with parameter: {parameter_name}.")
-                self.logger.error(f"Error encountered: {e}")
-                self.logger.info("System exit.")
-                exit(1)
+                raise e
         return parameter        
     
     def hold_license(self, ssm, on_hold):
-        """Put parameter license number ot use indicating retrieval in process."""
+        """Put parameter license number to use indicating retrieval in process."""
         
         hold_action = "place" if on_hold == "True" else "remove"
+        try:
+            self.hold(ssm, on_hold)
+            self.logger.info(f"{hold_action.capitalize()}d hold on IDL licenses.")
+        except botocore.exceptions.ClientError as e:
+            # Wait n number of seconds if encounter too many updates
+            if e.response["Error"]["Code"] == "TooManyUpdates": 
+                self.wait()
+                self.hold(ssm, on_hold)
+            else:
+                self.logger.info(f"Could not {hold_action} a hold on licenses...")
+                raise e
+            
+    def hold(self, ssm, on_hold):
+        """Indicate hold or release of IDL licenses."""
+        
         try:
             response = ssm.put_parameter(
                 Name=f"{self.prefix}-idl-retrieving-license",
@@ -166,15 +182,34 @@ class License:
                 Tier="Standard",
                 Overwrite=True
             )
-            self.logger.info(f"{hold_action.capitalize()}d hold on IDL licenses.")
         except botocore.exceptions.ClientError as e:
-            self.logger.info(f"Could not {hold_action} a hold on licenses...")
-            self.logger.error(e)
             raise e
+        
+        
+    def wait(self):
+        """Wait n number of seconds."""
+        
+        random.seed(a=os.environ.get('AWS_BATCH_JOB_ID'), version=2)
+        s = random.randint(1,10)
+        time.sleep(s)
         
     def write_licenses(self, ssm, dataset_lic, floating_lic):
         """Write license data to indicate number of licenses ready to be used."""
       
+        try:
+            self.write(ssm, dataset_lic, floating_lic)
+        except botocore.exceptions.ClientError as e:
+            # Wait n number of seconds if encounter too many updates
+            if e.response["Error"]["Code"] == "TooManyUpdates":
+                self.wait()
+                self.write(ssm, dataset_lic, floating_lic)
+            else:
+                self.logger.info(f"Could not return IDL licenses to {self.prefix}-idl-{self.dataset} and {self.prefix}-idl-floating...")
+                raise e
+        
+    def write(self, ssm, dataset_lic, floating_lic):
+        """Attempt to write license numbers back to parameter store."""
+        
         try:
             if dataset_lic:
                 current = ssm.get_parameter(Name=f"{self.prefix}-idl-{self.dataset}")["Parameter"]["Value"]
@@ -201,6 +236,4 @@ class License:
                 )
                 self.logger.info(f"Wrote {floating_lic} license(s) to {self.prefix}-idl-floating parameter.")
         except botocore.exceptions.ClientError as e:
-            self.logger.info(f"Could not return IDL licenses to {self.prefix}-idl-{self.dataset} and {self.prefix}-idl-floating...")
-            self.logger.error(e)
             raise e
