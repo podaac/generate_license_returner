@@ -32,6 +32,10 @@ data "aws_ecr_repository" "license_returner" {
   name = "${var.prefix}-license-returner"
 }
 
+data "aws_iam_role" "batch_ecs_execution_role" {
+  name = "${var.prefix}-batch-ecs-execution-role"
+}
+
 # Local variables
 locals {
   account_id = data.aws_caller_identity.current.account_id
